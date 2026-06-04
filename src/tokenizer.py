@@ -1,8 +1,8 @@
 import pandas as pd
 from collections import Counter
 
-from config import DATA_PATH, PAD_WORD, BOS_WORD, EOS_WORD, UNK_WORD
-from helpers import count_percent_of_dict
+from src.config import PAD_WORD, BOS_WORD, EOS_WORD, UNK_WORD
+from src.helpers import count_percent_of_dict
 
 
 class Tokenizer:
@@ -43,11 +43,3 @@ class Tokenizer:
         tokens += [vocab.get(w, vocab[UNK_WORD]) for w in sentence.lower().split()]
         tokens += [vocab[EOS_WORD]]
         return tokens
-
-if __name__ == "__main__":
-    tokenizer = Tokenizer()
-    data = tokenizer.load_data(DATA_PATH)
-    eng_tokens = tokenizer.tokenize(data['eng'].tolist(), max_size=15000)
-    esp_tokens = tokenizer.tokenize(data['esp'].tolist(), max_size=30000)
-    print(tokenizer.encode("Cat sat on a rug", eng_tokens))
-

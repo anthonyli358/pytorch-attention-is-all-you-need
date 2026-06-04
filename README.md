@@ -15,6 +15,10 @@ We use PAD_WORD later because when we process batches each tensor has uniform di
 2. Embedding + positional encoding - integers to vectors
 
 Initalise an embedding matrix of dimensions len(vocab) x a fixed vector length used for all tokens.
+This embeds a sentence.
+Now we want to add positional encoding so 'cat' at different positions are encoded differently, each sin and cos at a different frequency (based on position).
+We do this by creating a tensor of the same dimensions as the embedding, but encoding position.
+This takes a tensor of shapebatch x seq_len
 
 3. Attention
 4. Encoder block - attention + FFN + residuals
