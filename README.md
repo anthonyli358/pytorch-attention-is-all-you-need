@@ -10,9 +10,12 @@ First we tokenize e.g. "dog" -> 123 (arbitrary number). Purely a lookup table wh
 We can choose the cutoff for word_counts size by selecting the number which gets 95-98% of the corpus.
 Words that appear just once or twice never get enough gradient updates for the model to learn a useful embedding so we trim to reduce noise.
 
-Embed this later
+We use PAD_WORD later because when we process batches each tensor has uniform dimensions, so with this we can mask them.
 
 2. Embedding + positional encoding - integers to vectors
+
+Initalise an embedding matrix of dimensions len(vocab) x a fixed vector length used for all tokens.
+
 3. Attention
 4. Encoder block - attention + FFN + residuals
 5. Decoder block - masked attention + cross-attention + FFN
