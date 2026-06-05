@@ -1,3 +1,5 @@
+import torch
+
 def count_percent_of_dict(counter: dict):
     """
     Count the % of the total corpus covered by the words.
@@ -17,3 +19,7 @@ def count_percent_of_dict(counter: dict):
             print(f"{i} words cover 98% of tokens")
             break
     print(f"{len(counter)} words cover 100% of tokens")
+
+def create_mask(tokens:torch.Tensor, mask_idx:int=0):
+    mask = (tokens != mask_idx)
+    return mask.unsqueeze(1).unsqueeze(2)  # (batch, 1, 1, seq_len)

@@ -21,7 +21,19 @@ We do this by creating a tensor of the same dimensions as the embedding, but enc
 This takes a tensor of shapebatch x seq_len
 
 3. Attention
+
+a. Compute raw scores: QK^T / √d_k
+b. Mask - before softmax, so masked positions get -1e9 and softmax turns them into ~0 weight
+c. Softmax - normalise to get attention weights
+d. Dropout - after softmax, randomly zeroes out some attention weights during training
+e. Multiply by V
+f. Concat and apply W_o
+
 4. Encoder block - attention + FFN + residuals
+
+a. FFN - 3.3 in the paper. Two linear layers with ReLU in between: d_model → d_ff (2048) → d_model.
+b. Encoder layer - section 3.1 / Figure 1. N=6 of blocks that does: multi-head self-attention → add residual + layer norm → feed forward → add residual + layer norm.
+
 5. Decoder block - masked attention + cross-attention + FFN
 6. Full model - wire it all together
 7. Training loop - loss, optimiser, learning rate schedule
