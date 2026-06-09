@@ -20,6 +20,10 @@ def count_percent_of_dict(counter: dict):
             break
     print(f"{len(counter)} words cover 100% of tokens")
 
-def create_mask(tokens:torch.Tensor, mask_idx:int=0):
+def create_padding_mask(tokens:torch.Tensor, mask_idx:int=0):
     mask = (tokens != mask_idx)
     return mask.unsqueeze(1).unsqueeze(2)  # (batch, 1, 1, seq_len)
+
+def create_causal_mask(seq_len):
+    mask = torch.tril(torch.ones(seq_len, seq_len))
+    return mask.unsqueeze(0).unsqueeze(0)  # (1, 1, seq_len, seq_len)

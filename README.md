@@ -34,6 +34,10 @@ f. Concat and apply W_o
 a. FFN - 3.3 in the paper. Two linear layers with ReLU in between: d_model → d_ff (2048) → d_model.
 b. Encoder layer - section 3.1 / Figure 1. N=6 of blocks that does: multi-head self-attention → add residual + layer norm → feed forward → add residual + layer norm.
 
-5. Decoder block - masked attention + cross-attention + FFN
+5. Decoder block - masked multi-head attention + cross-attention + FFN
+
+a. Positional mask stops positions from attending to subsequent positions, this is the 'mask'
+b. Cross-attention takes the dot product with the encoder output to find the best match (K), and information about it (V)
+
 6. Full model - wire it all together
 7. Training loop - loss, optimiser, learning rate schedule
