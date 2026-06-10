@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-from embedder import Embedder
+from src.embedder import Embedder
 from src.multi_head_attention import MultiHeadAttention
 from src.positionwise_feedforward import PositionwiseFeedForward
 

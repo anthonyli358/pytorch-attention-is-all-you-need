@@ -14,7 +14,7 @@ class PositionwiseFeedForward(nn.Module):
         super().__init__()
         self.W_1 = nn.Linear(d_model, d_ff)
         self.W_2 = nn.Linear(d_ff, d_model)
-        self.dropout = torch.dropout(dropout)
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
         x = nn.functional.relu(self.W_1(x))

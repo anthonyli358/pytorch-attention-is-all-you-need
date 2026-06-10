@@ -29,8 +29,7 @@ class Embedder(nn.Module):
         self.register_buffer('pe', pe.unsqueeze(0))  # shape: (1, 3000, 512)
 
     def forward(self, tokens:torch.Tensor):
-        seq_len_idx = tokens.dim() - 1  # handle non batched tests
         x = self.embedding(tokens) * math.sqrt(self.d_model)  # section 3.4, increase embedding magnitude
-        x = x + self.pe[:, :tokens.size(seq_len_idx)]  # slice on dimension (assume 2d) to only include encoding on relevant tokens
+        x = x + self.pe[:, :tokens.size(1)]  # slice on dimension (assume 2d) to only include encoding on relevant tokens
         x = self.dropout(x)
         return x

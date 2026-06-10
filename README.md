@@ -40,4 +40,7 @@ a. Positional mask stops positions from attending to subsequent positions, this 
 b. Cross-attention takes the dot product with the encoder output to find the best match (K), and information about it (V)
 
 6. Full model - wire it all together
+
+a. Pass the batched tokens in the input, not the workaround. Otherwise masks don't apply properly
+
 7. Training loop - loss, optimiser, learning rate schedule
