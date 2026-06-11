@@ -23,15 +23,17 @@ if __name__ == "__main__":
 
     # Train/val split
     split_idx = int(len(data) * TRAIN_SPLIT)
-    train_dataset = TranslationDataset(
-        eng_tokens[:split_idx], esp_tokens[:split_idx], eng_vocab, esp_vocab
-    )
-    val_dataset = TranslationDataset(
-        eng_tokens[split_idx:], esp_tokens[split_idx:], eng_vocab, esp_vocab
-    )
+    train_dataset = TranslationDataset(eng_tokens[:split_idx], esp_tokens[:split_idx])
+    val_dataset = TranslationDataset(eng_tokens[split_idx:], esp_tokens[split_idx:])
     train_loader = DataLoader(
-        train_dataset, batch_size=32, shuffle=True, collate_fn=collate_fn
+        train_dataset,
+        batch_size=32,
+        shuffle=True,
+        collate_fn=TranslationDataset.pad_batch,
     )
     val_loader = DataLoader(
-        val_dataset, batch_size=32, shuffle=False, collate_fn=collate_fn
+        val_dataset,
+        batch_size=32,
+        shuffle=False,
+        collate_fn=TranslationDataset.pad_batch,
     )

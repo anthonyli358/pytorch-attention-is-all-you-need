@@ -44,3 +44,5 @@ b. Cross-attention takes the dot product with the encoder output to find the bes
 a. Pass the batched tokens in the input, not the workaround. Otherwise masks don't apply properly
 
 7. Training loop - loss, optimiser, learning rate schedule
+
+ Approx 25,000 source and target tokens per batch, start with 32.
