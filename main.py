@@ -1,7 +1,7 @@
 import torch
 
 from src.config import DATA_PATH, UNK_WORD
-from src.helpers import create_padding_mask
+from src.helpers import load_data, create_padding_mask
 from src.tokenizer import Tokenizer
 from src.embedder import Embedder
 from src.multi_head_attention import MultiHeadAttention
@@ -13,13 +13,13 @@ from src.transformer import Transformer
 if __name__ == "__main__":
     # Load
     tokenizer = Tokenizer()
-    data = tokenizer.load_data(DATA_PATH)
-    eng_vocab = tokenizer.tokenize(data['eng'].tolist(), max_size=15000)
-    esp_vocab = tokenizer.tokenize(data['esp'].tolist(), max_size=30000)
+    data = load_data(DATA_PATH)
+    eng_vocab = tokenizer.create_vocab(data['eng'].tolist(), max_size=15000)
+    esp_vocab = tokenizer.create_vocab(data['esp'].tolist(), max_size=30000)
 
     # Tokenize
-    test_tokens = tokenizer.encode("Cat sat on a rug", eng_vocab)
-    test_tgt_tokens = tokenizer.encode("El gato se sentó en la alfombra", esp_vocab)
+    test_tokens = tokenizer.tokenize("Cat sat on a rug", eng_vocab)
+    test_tgt_tokens = tokenizer.tokenize("El gato se sentó en la alfombra", esp_vocab)
     eng_vocab_size = len(eng_vocab)
     esp_vocab_size = len(esp_vocab)
     print(test_tokens)

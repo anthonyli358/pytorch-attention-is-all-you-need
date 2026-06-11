@@ -1,5 +1,6 @@
 import pandas as pd
 from collections import Counter
+from torch.utils.data import Dataset, DataLoader
 
 from src.config import PAD_WORD, BOS_WORD, EOS_WORD, UNK_WORD
 from src.helpers import count_percent_of_dict
@@ -9,17 +10,8 @@ class Tokenizer:
     def __init__(self):
         pass
 
-    def load_data(self, file_path:str) -> pd.DataFrame: 
-        data = pd.read_csv(
-            file_path,
-            sep="\t",
-            on_bad_lines="skip",
-            header=None,
-            names=["eng_id", "eng", "esp_id", "esp"],
-        )
-        return data
-
-    def tokenize(self, sentences:list, max_size:int=15000) -> dict:
+    @staticmethod
+    def create_vocab(sentences:list, max_size:int=15000) -> dict:
         """
         Tokenize a list of sentences into vocab dictionary.
         Keep top max_size words by frequency. Dropped/unseen words fallback to UNK_WORD at encoding.
@@ -35,7 +27,8 @@ class Tokenizer:
             
         return vocab
 
-    def encode(self, sentence:str, vocab:dict) -> list:
+    @staticmethod
+    def tokenize(sentence:str, vocab:dict) -> list:
         """
         Encode a sentence into tokens. 
         """
@@ -43,3 +36,4 @@ class Tokenizer:
         tokens += [vocab.get(w, vocab[UNK_WORD]) for w in sentence.lower().split()]
         tokens += [vocab[EOS_WORD]]
         return tokens
+    

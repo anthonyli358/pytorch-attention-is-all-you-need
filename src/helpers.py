@@ -1,4 +1,15 @@
+import pandas as pd
 import torch
+
+def load_data(file_path:str) -> pd.DataFrame: 
+    data = pd.read_csv(
+        file_path,
+        sep="\t",
+        on_bad_lines="skip",
+        header=None,
+        names=["eng_id", "eng", "esp_id", "esp"],
+    )
+    return data
 
 def count_percent_of_dict(counter: dict):
     """
