@@ -21,7 +21,7 @@ MODEL_PATH = "data/model.pt"
 ENG_VOCAB_PATH = "data/eng_vocab.json"
 ESP_VOCAB_PATH = "data/esp_vocab.json"
 TRAIN_MODEL = True
-N_EPOCHS = 1
+N_EPOCHS = 10
 
 
 if __name__ == "__main__":
@@ -33,6 +33,7 @@ if __name__ == "__main__":
     else:
         # Data
         data = load_data(DATA_PATH)
+        data = data.head(20000)  # Reduce size for testing
         print("Preprocessing data...")
 
         # Tokenize
@@ -95,7 +96,7 @@ if __name__ == "__main__":
 
     # Test translation
     test_sentence = "The cat sat on the mat"
-    test_tokens = torch.tensor(tokenizer.encode(test_sentence, eng_vocab)).unsqueeze(0)
+    test_tokens = torch.tensor(tokenizer.tokenize(test_sentence, eng_vocab)).unsqueeze(0)
     translation = greedy_decode(model, test_tokens, esp_vocab, device=device)
     print(f"\nInput: {test_sentence}")
     print(f"Output: {translation}")
