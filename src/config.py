@@ -1,4 +1,5 @@
 DATA_PATH = "data/Sentence pairs in English-Spanish - 2026-06-03.tsv"
+CHECKPOINTS_FOLDER = "checkpoints"
 
 PAD_WORD = '<blank>'  # pad to equal batch length
 BOS_WORD = '<bos>'  # beginning of sentence

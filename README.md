@@ -3,6 +3,15 @@ Pytorch implementation of [[1706.03762] Attention Is All You Need](https://arxiv
 
 Using English -> Spanish sentence pairs from [Tatoeba](https://tatoeba.org/en/downloads).
 
+For GPU, got to the [pytorch](https://pytorch.org/get-started/locally/) website and select the local installs to get the bash command.
+
+To use this repo, [install uv](https://docs.astral.sh/uv/getting-started/installation/), pip is recommended.
+
+```bash
+uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+```
+
+
 Plan:
 1. Tokeniser + vocab - transform TSV into integer sequences
 
@@ -46,3 +55,4 @@ a. Pass the batched tokens in the input, not the workaround. Otherwise masks don
 7. Training loop - loss, optimiser, learning rate schedule
 
  Approx 25,000 source and target tokens per batch, start with 32.
+ 

@@ -17,7 +17,9 @@ class Decoder(nn.Module):
         )
 
     def forward(self, tokens, encoder_output, mask=None):
-        com_mask = create_padding_mask(tokens) & create_causal_mask(tokens.size(1))
+        com_mask = create_padding_mask(tokens) & create_causal_mask(
+            tokens.size(1), tokens.device
+        )
         x = self.embedding(tokens)
         for layer in self.layers:
             x = layer(x, encoder_output, com_mask, mask)

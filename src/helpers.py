@@ -35,6 +35,6 @@ def create_padding_mask(tokens:torch.Tensor, mask_idx:int=0):
     mask = (tokens != mask_idx)
     return mask.unsqueeze(1).unsqueeze(2)  # (batch, 1, 1, seq_len)
 
-def create_causal_mask(seq_len):
-    mask = torch.tril(torch.ones(seq_len, seq_len)).bool()
+def create_causal_mask(seq_len, device):
+    mask = torch.tril(torch.ones(seq_len, seq_len, device=device)).bool()
     return mask.unsqueeze(0).unsqueeze(0)  # (1, 1, seq_len, seq_len)
