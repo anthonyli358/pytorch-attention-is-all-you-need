@@ -6,4 +6,5 @@ BOS_WORD = '<bos>'  # beginning of sentence
 EOS_WORD = '<eos>'  # end of sentence
 UNK_WORD = '<unk>'  # unkown tokens
 
-TRAIN_SPLIT = 0.9
+TRAIN_SPLIT = 0.8
+VAL_SPLIT = 0.1  # remaining is test

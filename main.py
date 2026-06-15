@@ -6,7 +6,7 @@ from torch import nn
 from torch.utils.data import DataLoader
 
 from src.helpers import load_data
-from src.config import DATA_PATH, TRAIN_SPLIT
+from src.config import DATA_PATH, TRAIN_SPLIT, VAL_SPLIT
 from src.tokenizer import Tokenizer
 from src.transformer import Transformer
 from train.translation_dataset import TranslationDataset
@@ -21,7 +21,7 @@ MODEL_PATH = "data/model.pt"
 ENG_VOCAB_PATH = "data/eng_vocab.json"
 ESP_VOCAB_PATH = "data/esp_vocab.json"
 TRAIN_MODEL = True
-N_EPOCHS = 10
+N_EPOCHS = 20
 
 
 if __name__ == "__main__":
@@ -33,7 +33,7 @@ if __name__ == "__main__":
     else:
         # Data
         data = load_data(DATA_PATH)
-        data = data.head(20000)  # Reduce size for testing
+        # data = data.head(20000)  # Reduce size for testing
         print("Preprocessing data...")
 
         # Tokenize
@@ -44,9 +44,10 @@ if __name__ == "__main__":
         esp_tokens = [tokenizer.tokenize(t, esp_vocab) for t in data["esp"]]
 
         # Train/val split
-        split_idx = int(len(data) * TRAIN_SPLIT)
-        train_dataset = TranslationDataset(eng_tokens[:split_idx], esp_tokens[:split_idx])
-        val_dataset = TranslationDataset(eng_tokens[split_idx:], esp_tokens[split_idx:])
+        train_idx = int(len(data) * TRAIN_SPLIT)
+        val_idx = int(len(data) * (TRAIN_SPLIT + VAL_SPLIT))
+        train_dataset = TranslationDataset(eng_tokens[:train_idx], esp_tokens[:train_idx])
+        val_dataset = TranslationDataset(eng_tokens[train_idx:val_idx], esp_tokens[train_idx:val_idx])
         train_loader = DataLoader(
             train_dataset,
             batch_size=32,
@@ -79,6 +80,8 @@ if __name__ == "__main__":
         # Training
         start = time.time()
         train_losses, val_losses = [], []
+        best_val_loss = float("inf")
+        patience, no_improve = 3, 0
         for epoch in range(1, N_EPOCHS + 1):
             train_loss = train(
                 model, train_loader, optimizer, scheduler, loss_fn, device, epoch
@@ -87,8 +90,16 @@ if __name__ == "__main__":
             train_losses.append(train_loss)
             val_losses.append(val_loss)
             print(
-                f"Epoch {epoch} | Train loss: {train_loss:.3f} | Val loss: {val_loss:.3f} in {(time.time() - start)/60.0} mins"
+                f"Epoch {epoch} | Train loss: {train_loss:.3f} | Val loss: {val_loss:.3f} in {(time.time() - start)/60:.1f} mins"
             )
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                no_improve = 0
+            else:
+                no_improve += 1
+                if no_improve >= patience:
+                    print("Early stopping, bug or reached min loss...")
+                    break
         
         # Save after training
         plot_losses(train_losses, val_losses, f"{TIMESTAMP}_loss.png")

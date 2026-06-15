@@ -56,3 +56,10 @@ a. Pass the batched tokens in the input, not the workaround. Otherwise masks don
 
  Approx 25,000 source and target tokens per batch, start with 32.
  
+ Extensions
+
+# Create separate file for the test set evaluation
+
+- BLEU score — loss tells you how wrong the model is, but BLEU measures translation quality by comparing n-gram overlap with reference translations. It's the standard metric for machine translation. nltk or sacrebleu libraries have it built in.
+- Translate multiple test sentences — run greedy_decode on a batch of test examples and print them side by side with the reference. Eyeballing actual translations tells you more than any number.
+- Beam search — replace greedy decode with beam search for better translations.
