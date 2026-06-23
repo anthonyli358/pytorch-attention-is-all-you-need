@@ -1,6 +1,6 @@
 from datetime import datetime
 import matplotlib.pyplot as plt
-from tabulate import tabulate
+import pandas as pd
 import time
 import torch
 from torch import nn
@@ -14,6 +14,7 @@ from train.translation_dataset import TranslationDataset
 from train.warmup_scheduler import WarmupScheduler
 from train.train import train, evaluate
 from train.inference import greedy_decode, beam_search_decode
+from train.metrics import compute_bleu
 from train.save_checkpoints import load_checkpoint, save_checkpoint
 from train.plot import plot_losses
 
@@ -121,5 +122,10 @@ if __name__ == "__main__":
         tokens = torch.tensor(tokenizer.tokenize(eng, eng_vocab)).unsqueeze(0)
         greedy = greedy_decode(model, tokens, esp_vocab, device=device)
         beam = beam_search_decode(model, tokens, esp_vocab, device=device)
-        rows.append([eng, esp, greedy, beam])
-    print("\n" + tabulate(rows, headers=["Source", "Expected", "Greedy", "Beam"], tablefmt="grid"))
+        rows.append({"source": eng, "target": esp, "greedy": greedy, "beam": beam})
+    df = pd.DataFrame(rows)
+    print(df)
+
+    greedy_bleu = compute_bleu(df['expected'], df['greedy'])
+    beam_bleu = compute_bleu(df['expected'], df['beam'])
+    print(f"\nGreedy BLEU: {greedy_bleu}, Beam BLEU: {beam_bleu}")
