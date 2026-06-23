@@ -1,5 +1,6 @@
 from datetime import datetime
 import matplotlib.pyplot as plt
+from tabulate import tabulate
 import time
 import torch
 from torch import nn
@@ -12,7 +13,7 @@ from src.transformer import Transformer
 from train.translation_dataset import TranslationDataset
 from train.warmup_scheduler import WarmupScheduler
 from train.train import train, evaluate
-from train.inference import greedy_decode
+from train.inference import greedy_decode, beam_search_decode
 from train.save_checkpoints import load_checkpoint, save_checkpoint
 from train.plot import plot_losses
 
@@ -105,9 +106,20 @@ if __name__ == "__main__":
         plot_losses(train_losses, val_losses, f"{TIMESTAMP}_loss.png")
         save_checkpoint(model, eng_vocab, esp_vocab, TIMESTAMP)
 
-    # Test translation
-    test_sentence = "The cat sat on the mat"
-    test_tokens = torch.tensor(tokenizer.tokenize(test_sentence, eng_vocab)).unsqueeze(0)
-    translation = greedy_decode(model, test_tokens, esp_vocab, device=device)
-    print(f"\nInput: {test_sentence}")
-    print(f"Output: {translation}")
+    # Test a group of translations
+    test_sentences = [
+        ("The cat sat on the mat", "El gato se sentó en la alfombra"),
+        ("I love you", "Te amo"),
+        ("Where is the bathroom", "Dónde está el baño"),
+        ("She went to the store", "Ella fue a la tienda"),
+        ("We are learning Spanish", "Estamos aprendiendo español"),
+    ]
+
+    print("\n--- Translations ---")
+    rows = []
+    for eng, esp in test_sentences:
+        tokens = torch.tensor(tokenizer.tokenize(eng, eng_vocab)).unsqueeze(0)
+        greedy = greedy_decode(model, tokens, esp_vocab, device=device)
+        beam = beam_search_decode(model, tokens, esp_vocab, device=device)
+        rows.append([eng, esp, greedy, beam])
+    print("\n" + tabulate(rows, headers=["Source", "Expected", "Greedy", "Beam"], tablefmt="grid"))
