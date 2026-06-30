@@ -15,7 +15,7 @@ from train.warmup_scheduler import WarmupScheduler
 from train.train import train, evaluate
 from train.inference import greedy_decode, beam_search_decode
 from train.metrics import compute_bleu
-from train.save_checkpoints import load_checkpoint, save_checkpoint
+from train.save_checkpoints import load_checkpoint, save_checkpoint, save_training_state, load_training_state
 from train.plot import plot_losses
 
 TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -24,6 +24,7 @@ ENG_VOCAB_PATH = "data/eng_vocab.json"
 ESP_VOCAB_PATH = "data/esp_vocab.json"
 TRAIN_MODEL = True
 N_EPOCHS = 20
+CKPT = "data/train_state.pt" 
 
 
 if __name__ == "__main__":
@@ -81,10 +82,10 @@ if __name__ == "__main__":
 
         # Training
         start = time.time()
-        train_losses, val_losses = [], []
-        best_val_loss = float("inf")
-        patience, no_improve = 3, 0
-        for epoch in range(1, N_EPOCHS + 1):
+        patience = 3
+        start_epoch, best_val_loss, no_improve, train_losses, val_losses = \
+            load_training_state(CKPT, model, optimizer, scheduler, device)
+        for epoch in range(start_epoch, N_EPOCHS + 1):
             train_loss = train(
                 model, train_loader, optimizer, scheduler, loss_fn, device, epoch
             )
@@ -102,6 +103,9 @@ if __name__ == "__main__":
                 if no_improve >= patience:
                     print("Early stopping, bug or reached min loss...")
                     break
+        
+            save_training_state(CKPT, model, optimizer, scheduler, epoch,
+                        best_val_loss, no_improve, train_losses, val_losses)  # resume point
         
         # Save after training
         plot_losses(train_losses, val_losses, f"{TIMESTAMP}_loss.png")

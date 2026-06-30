@@ -17,3 +17,9 @@ class WarmupScheduler:
         )
         for param_group in self.optimizer.param_groups:
             param_group["lr"] = lr
+
+    def state_dict(self):
+        return {k: v for k, v in self.__dict__.items() if k != "optimizer"}
+
+    def load_state_dict(self, state):
+        self.__dict__.update(state)
