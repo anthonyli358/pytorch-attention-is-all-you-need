@@ -1,5 +1,4 @@
 from datetime import datetime
-import matplotlib.pyplot as plt
 import pandas as pd
 import time
 import torch
@@ -15,16 +14,20 @@ from train.warmup_scheduler import WarmupScheduler
 from train.train import train, evaluate
 from train.inference import greedy_decode, beam_search_decode
 from train.metrics import compute_bleu
-from train.save_checkpoints import load_checkpoint, save_checkpoint, save_training_state, load_training_state
+from train.save_checkpoints import (
+    load_checkpoint,
+    save_checkpoint,
+    save_training_state,
+    load_training_state,
+)
 from train.plot import plot_losses
 
 TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
-MODEL_PATH = "data/model.pt"
-ENG_VOCAB_PATH = "data/eng_vocab.json"
-ESP_VOCAB_PATH = "data/esp_vocab.json"
+CKPT = f"data/train_state_{TIMESTAMP}.pt"
 TRAIN_MODEL = True
 N_EPOCHS = 20
-CKPT = "data/train_state.pt" 
+BATCH_SIZE = 32
+PATIENCE = 10
 
 
 if __name__ == "__main__":
@@ -32,11 +35,11 @@ if __name__ == "__main__":
     print(f"Using device: {device}")
 
     if not TRAIN_MODEL:
-        model, eng_vocab, esp_vocab, tokenizer = load_checkpoint(Transformer, device)
+        model, eng_vocab, esp_vocab = load_checkpoint(Transformer, device)
+        tokenizer = Tokenizer()
     else:
-        # Data
+        # Data - full dataset for the real run
         data = load_data(DATA_PATH)
-        # data = data.head(20000)  # Reduce size for testing
         print("Preprocessing data...")
 
         # Tokenize
@@ -46,20 +49,22 @@ if __name__ == "__main__":
         eng_tokens = [tokenizer.tokenize(s, eng_vocab) for s in data["eng"]]
         esp_tokens = [tokenizer.tokenize(t, esp_vocab) for t in data["esp"]]
 
-        # Train/val split
+        # Train/val/test split
         train_idx = int(len(data) * TRAIN_SPLIT)
         val_idx = int(len(data) * (TRAIN_SPLIT + VAL_SPLIT))
         train_dataset = TranslationDataset(eng_tokens[:train_idx], esp_tokens[:train_idx])
-        val_dataset = TranslationDataset(eng_tokens[train_idx:val_idx], esp_tokens[train_idx:val_idx])
+        val_dataset = TranslationDataset(
+            eng_tokens[train_idx:val_idx], esp_tokens[train_idx:val_idx]
+        )
         train_loader = DataLoader(
             train_dataset,
-            batch_size=32,
+            batch_size=BATCH_SIZE,
             shuffle=True,
             collate_fn=TranslationDataset.pad_batch,
         )
         val_loader = DataLoader(
             val_dataset,
-            batch_size=32,
+            batch_size=BATCH_SIZE,
             shuffle=False,
             collate_fn=TranslationDataset.pad_batch,
         )
@@ -69,7 +74,6 @@ if __name__ == "__main__":
             src_vocab_size=len(eng_vocab),
             tgt_vocab_size=len(esp_vocab),
         ).to(device)
-
         total_params = sum(p.numel() for p in model.parameters())
         print(f"Total parameters: {total_params:,}")
 
@@ -77,12 +81,14 @@ if __name__ == "__main__":
         loss_fn = nn.CrossEntropyLoss(ignore_index=0)  # ignore PAD_WORD
         optimizer = torch.optim.Adam(
             model.parameters(), lr=0, betas=(0.9, 0.98), eps=1e-9
-        )  # params from paper
-        scheduler = WarmupScheduler(optimizer, d_model=512, warmup_steps=4000)
+        )  # lr controlled by scheduler
+        total_steps = len(train_loader) * N_EPOCHS
+        warmup_steps = max(200, int(total_steps * 0.1))  # ~10% of training
+        print(f"Total steps: {total_steps} | Warmup steps: {warmup_steps}")
+        scheduler = WarmupScheduler(optimizer, d_model=512, warmup_steps=warmup_steps)
 
-        # Training
+        # Training (resumable)
         start = time.time()
-        patience = 3
         start_epoch, best_val_loss, no_improve, train_losses, val_losses = \
             load_training_state(CKPT, model, optimizer, scheduler, device)
         for epoch in range(start_epoch, N_EPOCHS + 1):
@@ -93,20 +99,24 @@ if __name__ == "__main__":
             train_losses.append(train_loss)
             val_losses.append(val_loss)
             print(
-                f"Epoch {epoch} | Train loss: {train_loss:.3f} | Val loss: {val_loss:.3f} in {(time.time() - start)/60:.1f} mins"
+                f"Epoch {epoch} | Train loss: {train_loss:.3f} | "
+                f"Val loss: {val_loss:.3f} in {(time.time() - start)/60:.1f} mins"
             )
+
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
                 no_improve = 0
             else:
                 no_improve += 1
-                if no_improve >= patience:
-                    print("Early stopping, bug or reached min loss...")
+                if no_improve >= PATIENCE:
+                    print("Early stopping...")
                     break
-        
-            save_training_state(CKPT, model, optimizer, scheduler, epoch,
-                        best_val_loss, no_improve, train_losses, val_losses)  # resume point
-        
+
+            save_training_state(
+                CKPT, model, optimizer, scheduler, epoch,
+                best_val_loss, no_improve, train_losses, val_losses,
+            )
+
         # Save after training
         plot_losses(train_losses, val_losses, f"{TIMESTAMP}_loss.png")
         save_checkpoint(model, eng_vocab, esp_vocab, TIMESTAMP)
@@ -128,8 +138,24 @@ if __name__ == "__main__":
         beam = beam_search_decode(model, tokens, esp_vocab, device=device)
         rows.append({"source": eng, "target": esp, "greedy": greedy, "beam": beam})
     df = pd.DataFrame(rows)
-    print(df)
+    print(df.to_string(index=False))
 
-    greedy_bleu = compute_bleu(df['expected'], df['greedy'])
-    beam_bleu = compute_bleu(df['expected'], df['beam'])
-    print(f"\nGreedy BLEU: {greedy_bleu}, Beam BLEU: {beam_bleu}")
+    greedy_bleu = compute_bleu(df["target"].tolist(), df["greedy"].tolist())
+    beam_bleu = compute_bleu(df["target"], df["beam"])
+    print(f"\nGreedy BLEU: {greedy_bleu}")
+    print(f"Beam BLEU:   {beam_bleu}")
+
+    # Teacher-forced inspection: what does the model predict at each position?
+    src_s, tgt_s = "I love you", "te amo"
+    src = torch.tensor(tokenizer.tokenize(src_s, eng_vocab)).unsqueeze(0).to(device)
+    tgt = torch.tensor(tokenizer.tokenize(tgt_s, esp_vocab)).unsqueeze(0).to(device)
+    idx_to_word = {v: k for k, v in esp_vocab.items()}
+
+    model.eval()
+    with torch.no_grad():
+        out = model(src, tgt[:, :-1])          # teacher forcing
+        preds = out.argmax(dim=-1).squeeze(0)  # predicted next token at each position
+
+    for i, p in enumerate(preds.tolist()):
+        given = idx_to_word[tgt[0, i].item()]
+        print(f"given '{given}' → predicts '{idx_to_word[p]}'")

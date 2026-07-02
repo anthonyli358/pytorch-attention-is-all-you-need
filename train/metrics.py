@@ -14,6 +14,10 @@ def compute_bleu(references, translations):
     Returns:
         BLEU score
     """
+    references = [str(r) for r in references]
+    translations = [str(t) for t in translations]
+    print(f"DEBUG types: refs={type(references)}, first={type(references[0]) if references else 'empty'}")
+    print(f"DEBUG refs: {references}")
+    print(f"DEBUG hyps: {translations}")
     bleu = BLEU()
-    results = bleu.corpus_score(translations, [references])
-    return results
+    return bleu.corpus_score(translations, [references])

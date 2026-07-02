@@ -28,7 +28,8 @@ def train(model, dataloader, optimizer, scheduler, loss_fn, device, epoch):
             model.parameters(), max_norm=1.0
         )  # Gradient clipping to prevent exploding gradients
         optimizer.step()
-        scheduler.step()
+        if scheduler is not None:
+            scheduler.step()
 
         total_loss += loss.item()
 

@@ -12,6 +12,9 @@ class Transformer(nn.Module):
         self.encoder = Encoder(src_vocab_size, n_layers, d_model, d_ff, n_heads, dropout)
         self.decoder = Decoder(tgt_vocab_size, n_layers, d_model, d_ff, n_heads, dropout)
         self.output = nn.Linear(d_model, tgt_vocab_size)
+        for p in self.parameters():
+            if p.dim() > 1:
+                nn.init.xavier_uniform_(p)
 
     def forward(self, src_tokens, tgt_tokens):
         mask = create_padding_mask(src_tokens)
