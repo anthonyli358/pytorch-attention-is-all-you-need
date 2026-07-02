@@ -23,7 +23,7 @@ from train.save_checkpoints import (
 from train.plot import plot_losses
 
 TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
-CKPT = f"data/train_state_{TIMESTAMP}.pt"
+CKPT = "data/train_state.pt"
 TRAIN_MODEL = True
 N_EPOCHS = 20
 BATCH_SIZE = 32
@@ -103,7 +103,7 @@ if __name__ == "__main__":
                 f"Val loss: {val_loss:.3f} in {(time.time() - start)/60:.1f} mins"
             )
 
-            if val_loss < best_val_loss:
+            if val_loss < best_val_loss:  # train kept going down and val flat so no need to end
                 best_val_loss = val_loss
                 no_improve = 0
             else:
