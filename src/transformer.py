@@ -12,6 +12,8 @@ class Transformer(nn.Module):
         self.encoder = Encoder(src_vocab_size, n_layers, d_model, d_ff, n_heads, dropout)
         self.decoder = Decoder(tgt_vocab_size, n_layers, d_model, d_ff, n_heads, dropout)
         self.output = nn.Linear(d_model, tgt_vocab_size)
+        # Paper section 3.4
+        self.output.weight = self.decoder.embedding.embedding.weight
         for p in self.parameters():
             if p.dim() > 1:
                 nn.init.xavier_uniform_(p)

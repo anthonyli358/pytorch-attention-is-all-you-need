@@ -1,9 +1,26 @@
-import pandas as pd
-from collections import Counter
-from torch.utils.data import Dataset, DataLoader
-
+import os
+import sentencepiece as spm
 from src.config import PAD_WORD, BOS_WORD, EOS_WORD, UNK_WORD
-from src.helpers import count_percent_of_dict
+
+
+class SPVocab:
+    """
+    Wraps a trained sentencepiece model but behaves like the old vocab dict
+    where the codebase expects it: len(vocab) and vocab[SPECIAL_WORD].
+    """
+    def __init__(self, sp):
+        self.sp = sp
+        # Special tokens are trained at fixed ids to match the old dict layout
+        self._special = {PAD_WORD: 0, BOS_WORD: 1, EOS_WORD: 2, UNK_WORD: 3}
+
+    def __len__(self):
+        return self.sp.get_piece_size()
+
+    def __getitem__(self, key):
+        # Supports vocab[BOS_WORD] etc, same as the old dict
+        if key in self._special:
+            return self._special[key]
+        return self.sp.piece_to_id(key)
 
 
 class Tokenizer:
@@ -11,29 +28,51 @@ class Tokenizer:
         pass
 
     @staticmethod
-    def create_vocab(sentences:list, max_size:int=15000) -> dict:
+    def create_vocab(sentences, max_size=15000, model_prefix="data/spm"):
         """
-        Tokenize a list of sentences into vocab dictionary.
-        Keep top max_size words by frequency. Dropped/unseen words fallback to UNK_WORD at encoding.
+        Train (or load) a sentencepiece BPE model. Returns an SPVocab that
+        supports len() and [SPECIAL_WORD] indexing like the old vocab dict.
+        max_size maps to sentencepiece's vocab_size.
         """
-        word_counts = Counter()
-        for s in sentences:
-            word_counts.update(s.lower().split())
+        model_file = f"{model_prefix}_{max_size}.model"
 
-        most_common = word_counts.most_common(max_size)
-        vocab = {PAD_WORD: 0, BOS_WORD: 1, EOS_WORD: 2, UNK_WORD: 3}
-        for word, _ in most_common:
-            vocab[word] = len(vocab)
-            
-        return vocab
+        if not os.path.exists(model_file):
+            corpus = f"{model_prefix}_{max_size}_corpus.txt"
+            os.makedirs(os.path.dirname(model_file), exist_ok=True)
+            with open(corpus, "w", encoding="utf-8") as f:
+                for s in sentences:
+                    f.write(s.strip() + "\n")
+
+            spm.SentencePieceTrainer.train(
+                input=corpus,
+                model_prefix=f"{model_prefix}_{max_size}",
+                vocab_size=max_size,
+                pad_id=0, bos_id=1, eos_id=2, unk_id=3,
+                pad_piece=PAD_WORD, bos_piece=BOS_WORD,
+                eos_piece=EOS_WORD, unk_piece=UNK_WORD,
+                character_coverage=1.0,
+                model_type="bpe",
+            )
+            os.remove(corpus)
+
+        sp = spm.SentencePieceProcessor(model_file=model_file)
+        return SPVocab(sp)
 
     @staticmethod
-    def tokenize(sentence:str, vocab:dict) -> list:
+    def tokenize(sentence, vocab):
         """
-        Encode a sentence into tokens. 
+        Encode a sentence into subword token ids, wrapped with BOS/EOS.
+        Same signature and return type (list of ints) as before.
         """
-        tokens = [vocab[BOS_WORD]]
-        tokens += [vocab.get(w, vocab[UNK_WORD]) for w in sentence.lower().split()]
-        tokens += [vocab[EOS_WORD]]
-        return tokens
-    
+        ids = vocab.sp.encode(sentence, out_type=int)
+        return [vocab[BOS_WORD]] + ids + [vocab[EOS_WORD]]
+
+    @staticmethod
+    def detokenize(ids, vocab):
+        """
+        Turn token ids back into a string, stripping special tokens.
+        Use this in inference instead of the idx_to_word dict lookup.
+        """
+        specials = {vocab[PAD_WORD], vocab[BOS_WORD], vocab[EOS_WORD]}
+        ids = [i for i in ids if i not in specials]
+        return vocab.sp.decode(ids)
