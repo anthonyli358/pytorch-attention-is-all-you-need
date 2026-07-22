@@ -88,7 +88,7 @@ def run_training(data, train_idx, val_idx, device):
         if val_loss < best_val_loss:
             best_val_loss = val_loss
             no_improve = 0
-            save_checkpoint(model, eng_vocab, esp_vocab, TIMESTAMP)
+            save_checkpoint(model, TIMESTAMP)
             print(f"  New best val loss {best_val_loss:.3f} - checkpoint saved")
         else:
             no_improve += 1

@@ -8,7 +8,7 @@ ENG_SPM = "data/spm_eng_16000.model"
 ESP_SPM = "data/spm_esp_16000.model"
 
 
-def save_checkpoint(model, eng_vocab, esp_vocab, timestamp, dir=CHECKPOINTS_FOLDER):
+def save_checkpoint(model, timestamp, dir=CHECKPOINTS_FOLDER):
     os.makedirs(dir, exist_ok=True)
     torch.save(model.state_dict(), os.path.join(dir, f"{timestamp}_model.pt"))
     print(f"Checkpoint saved to {dir}/{timestamp}_model.pt")
