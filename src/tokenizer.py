@@ -76,3 +76,9 @@ class Tokenizer:
         specials = {vocab[PAD_WORD], vocab[BOS_WORD], vocab[EOS_WORD]}
         ids = [i for i in ids if i not in specials]
         return vocab.sp.decode(ids)
+
+    @staticmethod
+    def load_vocab(model_file):
+        """Load an already-trained sentencepiece model into an SPVocab."""
+        sp = spm.SentencePieceProcessor(model_file=model_file)
+        return SPVocab(sp)
