@@ -35,7 +35,13 @@ $$\text{geomean} = \left( \prod_{n=1}^{4} p_n \right)^{1/4} = (0.543 \times 0.27
 
 **Brevity penalty**, where $c$ is the candidate length and $r$ the reference length:
 
-$$BP = \begin{cases} 1 & \text{if } c > r \\ e^{(1 - r/c)} & \text{if } c \le r \end{cases}$$
+$$
+BP =
+\begin{cases}
+1 & \text{if } c > r \\
+e^{1 - r/c} & \text{if } c \le r
+\end{cases}
+$$
 
 Here $c = 3632 \ge r = 3556$, so $BP = 1.000$.
 
