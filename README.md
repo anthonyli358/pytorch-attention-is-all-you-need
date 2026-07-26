@@ -31,7 +31,7 @@ BLEU = 22.53   54.3/27.6/17.1/10.1 (BP = 1.000, ratio = 1.021)
 
 **Geometric mean of the precisions** $p_1, \dots, p_4$:
 
-$$\text{geo\_mean} = \left( \prod_{n=1}^{4} p_n \right)^{1/4} = (0.543 \times 0.276 \times 0.171 \times 0.101)^{1/4} \approx 0.2255$$
+$$\text{geo_mean} = \left( \prod_{n=1}^{4} p_n \right)^{1/4} = (0.543 \times 0.276 \times 0.171 \times 0.101)^{1/4} \approx 0.2255$$
 
 **Brevity penalty**, where $c$ is the candidate length and $r$ the reference length:
 
@@ -41,7 +41,7 @@ Here $c = 3632 \ge r = 3556$, so $BP = 1.000$.
 
 **Final score** (scaled to 0–100):
 
-$$BLEU = BP \times \text{geo\_mean} \times 100 = 1.000 \times 0.2255 \times 100 \approx 22.5$$
+$$BLEU = BP \times \text{geo_mean} \times 100 = 1.000 \times 0.2255 \times 100 \approx 22.5$$
 
 A good score requires performing well at every n-gram level, and although known limitation of BLEU is that it penalises correct alternatives such as "Te quiero" vs "Te amo" for "I love you" in our results, we have still done well here. 
 
@@ -92,41 +92,40 @@ The most important takeaways from this implementation exercise are:
 - Since training takes compute and time, saving **checkpoints** is important for resuming training at various points.
 - **Label smoothing** is a very important part of the regularization (section 5.4).
 
-### Implementation
+## Implementation
 
-1. Word tokenizer 
+### 1. Word tokenizer 
 
-   First we tokenize words into a lookup table where a larger corpus has a larger dictionary e.g. "dog" -> 123 (arbitrary number). We can choose the cutoff for word_counts size by selecting the number which covers 95-98% of the corpus. Rare words that appear just once or twice never get enough gradient updates for the model to learn a useful embedding so we trim them to reduce noise. We use PAD_WORD so that sequences of a different length can be padded to a shared shape within a batch and masked later. Due to its vocabulary limitations, this initial word-level tokenizer was later replaced with SentencePiece BPE.
+First we tokenize words into a lookup table where a larger corpus has a larger dictionary e.g. "dog" -> 123 (arbitrary number). We can choose the cutoff for word_counts size by selecting the number which covers 95-98% of the corpus. Rare words that appear just once or twice never get enough gradient updates for the model to learn a useful embedding so we trim them to reduce noise. We use PAD_WORD so that sequences of a different length can be padded to a shared shape within a batch and masked later. Due to its vocabulary limitations, this initial word-level tokenizer was later replaced with SentencePiece BPE.
 
-2. Embedding + positional encoding
+### 2. Embedding + positional encoding
 
-    Now initalise an embedding matrix of dimensions `len(vocab) x d_model ` (a fixed length used for all tokens), this embeds a sentence. To encode order we use sin and cos at different frequencies (based on position) to add a positional encoding to each token's embedding. This layer takes a tensor of `batch x seq_len` and returns `batch x seq_len x d_model`.
+Now initalise an embedding matrix of dimensions `len(vocab) x d_model ` (a fixed length used for all tokens), this embeds a sentence. To encode order we use sin and cos at different frequencies (based on position) to add a positional encoding to each token's embedding. This layer takes a tensor of `batch x seq_len` and returns `batch x seq_len x d_model`.
 
-3. Attention
+### 3. Attention
 
-    The scaled dot-product attention $\text{softmax}(QK^T / \sqrt{d_k})\,V$ computes how much each token should attend to other tokens (section 3.2.1). Dividing by $\sqrt{d_k}$ keeps the scores from growing large, which would otherwise saturate the softmax and shrink its gradients.
-    We mask before softmax so masked positions get -1e9 and softmax turns them into 0 weight. Then dropout applies to randomly zero weights and reduce the chance of overfitting. Multi-head attention runs 8 of these attention blocks in parallel over 64-dim subspaces (`d_k = d_model / n_heads`) so different heads can specialise, then concatenates the heads and projects the result (section 3.2.2).
+The scaled dot-product attention $\text{softmax}(QK^T / \sqrt{d_k})\,V$ computes how much each token should attend to other tokens (section 3.2.1). Dividing by $\sqrt{d_k}$ keeps the scores from growing large, which would otherwise saturate the softmax and shrink its gradients.
+We mask before softmax so masked positions get -1e9 and softmax turns them into 0 weight. Then dropout applies to randomly zero weights and reduce the chance of overfitting. Multi-head attention runs 8 of these attention blocks in parallel over 64-dim subspaces (`d_k = d_model / n_heads`) so different heads can specialise, then concatenates the heads and projects the result (section 3.2.2).
 
-4. Encoder
+### 4. Encoder
 
-    We then create a FFN (feed forward network) - two linear layers with ReLU in between `d_model → d_ff (2048) → d_model` (section 3.3). An encoder layer combines multi-head self-attention → add residual + layer norm → feed-forward → add residual + layer norm, and the encoder stacks N = 6 of these (section 3.1, figure 1).
+We then create a FFN (feed forward network) - two linear layers with ReLU in between `d_model → d_ff (2048) → d_model` (section 3.3). An encoder layer combines multi-head self-attention → add residual + layer norm → feed-forward → add residual + layer norm, and the encoder stacks N = 6 of these (section 3.1, figure 1).
 
-5. Decoder
+### 5. Decoder
 
-    In the decoder the causal mask stops positions from attending to future tokens (only itself and past positions). Cross-attention then takes the dot product with the encoder output to find the best match (K), and information about it (V), given the query (Q). The $Q\cdot K$ match finds which source tokens are relevant to what the decoder needs now.
+In the decoder the causal mask stops positions from attending to future tokens (only itself and past positions). Cross-attention then takes the dot product with the encoder output to find the best match (K), and information about it (V), given the query (Q). The $Q\cdot K$ match finds which source tokens are relevant to what the decoder needs now.
 
-6. Transformer
+### 6. Transformer
 
-    Wire it all together in the full transformer and construct the masks from the batch input tokens.
+Wire it all together in the full transformer and construct the masks from the batch input tokens.
 
-7. Training loop
+### 7. Training loop
 
-    Trained with cross-entropy loss, the Adam optimizer ($\beta = 0.9, 0.98$), and the warmup learning-rate schedule (section 5.3). The paper batches by token count (~25k tokens/batch) whereas here we use a fixed batch size of 32 for simplicity. We trained for 25 epochs (~3 hours on an RTX 3060 Ti) and validation loss plateaus around epoch 15, so this leaves headroom without overfitting.
+Trained with cross-entropy loss, the Adam optimizer ($\beta = 0.9, 0.98$), and the warmup learning-rate schedule (section 5.3). The paper batches by token count (~25k tokens/batch) whereas here we use a fixed batch size of 32 for simplicity. We trained for 25 epochs (~3 hours on an RTX 3060 Ti) and validation loss plateaus around epoch 15, so this leaves headroom without overfitting.
 
-<a id="evaluate"></a>
-8. Evaluate
+### 8. Evaluate
 
-    We use BLEU scores as the evaluation metric for translations and ran multiple test sentences using both greedy decode and beam search. For shor ter sentences there generally wasn't any difference between the two, this is because there isn't as much probability to diverge. During initial evaluations we ran into test sentences returning `<unk>` far too often, which was solved by introducing SentencePiece BPE.
+We use BLEU scores as the evaluation metric for translations and ran multiple test sentences using both greedy decode and beam search. For shor ter sentences there generally wasn't any difference between the two, this is because there isn't as much probability to diverge. During initial evaluations we ran into test sentences returning `<unk>` far too often, which was solved by introducing SentencePiece BPE.
 
 ## Resources
 
