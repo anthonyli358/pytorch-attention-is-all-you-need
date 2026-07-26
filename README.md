@@ -65,7 +65,7 @@ uv sync
 
 4. Download the English–Spanish sentence pairs from [Tatoeba](https://tatoeba.org/en/downloads) and place the TSV in `data/`, updating `DATA_PATH` in `src/config.py`.
 
-5. Then train from scratch (set `TRAIN_MODEL = True` in `main.py`).
+5. Then train from scratch using [main.py](main.py) (set `TRAIN_MODEL = True`).
 
 ```bash
 uv run python main.py
@@ -73,7 +73,7 @@ uv run python main.py
 
 6. The best checkpoint (by validation loss) is saved to `checkpoints/` each time it improves, and a loss curve is written alongside it. To evaluate an existing checkpoint, set `TRAIN_MODEL = False` and run again.
 
-7. During development check shape and understanding with the tests.
+7. During development check shape and understanding with [tests](smoke_test.py).
 
 ```bash
 uv run pytest
