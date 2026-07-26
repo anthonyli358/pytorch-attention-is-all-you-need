@@ -73,7 +73,7 @@ uv run python main.py
 
 6. The best checkpoint (by validation loss) is saved to `checkpoints/` each time it improves, and a loss curve is written alongside it. To evaluate an existing checkpoint, set `TRAIN_MODEL = False` and run again.
 
-7. During development check shape and understanding with [tests](smoke_test.py).
+7. During development check shape and understanding with [tests](tests/test_shapes.py.py) and [smoke_tests](smoke_test.py).
 
 ```bash
 uv run pytest
