@@ -152,8 +152,33 @@ A few details that matter and are easy to get wrong:
 - **Subword tokenisation**: word-level tokenisation sent rare words to `<unk>` and capped translation quality. SentencePiece BPE decomposes unseen words into known subword pieces, effectively eliminating `<unk>`.
 - **Checkpoint saving**: the best model is saved *during* training on each validation improvement, so a crash or interruption never loses good weights.
 
+## Debugging notes
+
+Getting the model to train well took more debugging than writing the architecture, and the process is worth recording.
+
+Early runs plateaued at a high loss and generation collapsed into repeating a single token (indicar indicar indicar...). The key to diagnosing this was the overfit-a-tiny-batch test: training on ~100 sentence pairs to confirm the model could memorise them. It could — loss dropped near zero and it reproduced the training data — which proved the architecture, masking, and loss shift were all correct, and pointed the investigation at training setup rather than model code.
+
+From there the real causes surfaced one at a time:
+
+The plateau was a learning-rate schedule issue: the Noam warmup was hardcoded to 4000 steps (tuned for the paper's far larger dataset), so a short run never left the warmup phase. Scaling warmup to ~10% of total steps fixed it.
+The garbled generation was a stale checkpoint — inference was loading weights from an earlier failed run whose vocabulary no longer matched. Saving the best checkpoint during training (rather than after a blocking plot call that could be interrupted) removed the failure mode.
+Remaining quality was capped by word-level tokenisation sending rare words to <unk>. Switching to SentencePiece BPE was the single biggest quality improvement.
+
+The lesson that generalised: when a model looks broken, separate "is the architecture correct?" from "is the training correct?" before changing anything. The overfit test answers the first question cheaply and tells you which half of the problem to work on.
+
 ## Acknowledgements
 
 - Vaswani et al., [*Attention Is All You Need*](https://arxiv.org/abs/1706.03762) (2017)
 - [Tatoeba](https://tatoeba.org) for the sentence-pair corpus
 - [SentencePiece](https://github.com/google/sentencepiece) for subword tokenisation
+
+--- Sample Translations ---
+                 source                          target                        greedy                          beam
+ The cat sat on the mat El gato se sentó en la alfombra El gato se sentó en la silla. El gato se sentó en la silla.
+             I love you                          Te amo                       Te amo.                       Te amo.
+  Where is the bathroom              Dónde está el baño         Mi baño está de baño.            Papá está el baño.
+  She went to the store            Ella fue a la tienda         Ella fue a la tienda.         Ella fue a la tienda.
+We are learning Spanish     Estamos aprendiendo español   Estamos estudiando español.   Estamos estudiando español.
+
+--- Held-out Test BLEU (500 sentences) ---
+BLEU = 22.53 54.3/27.6/17.1/10.1 (BP = 1.000 ratio = 1.021 hyp_len = 3632 ref_len = 3556)

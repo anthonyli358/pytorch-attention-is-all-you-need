@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-from src.helpers import create_padding_mask, create_causal_mask
+from src.masks import create_padding_mask, create_causal_mask
 from src.embedder import Embedder
 from src.multi_head_attention import MultiHeadAttention
 from src.positionwise_feedforward import PositionwiseFeedForward

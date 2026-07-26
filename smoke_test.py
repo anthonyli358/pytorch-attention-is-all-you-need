@@ -17,8 +17,8 @@ if __name__ == "__main__":
     # Load
     tokenizer = Tokenizer()
     data = load_data(DATA_PATH)
-    eng_vocab = tokenizer.create_vocab(data['eng'].tolist(), max_size=15000)
-    esp_vocab = tokenizer.create_vocab(data['esp'].tolist(), max_size=30000)
+    eng_vocab = tokenizer.create_vocab(data["eng"].tolist(), max_size=15000)
+    esp_vocab = tokenizer.create_vocab(data["esp"].tolist(), max_size=30000)
 
     # Tokenize
     test_tokens = tokenizer.tokenize("Cat sat on a rug", eng_vocab)
@@ -28,10 +28,10 @@ if __name__ == "__main__":
     print(test_tokens)
 
     # Batch the 1d tokens
-    test_tokens = torch.tensor(test_tokens).unsqueeze(0)  
+    test_tokens = torch.tensor(test_tokens).unsqueeze(0)
     test_tgt_tokens = torch.tensor(test_tgt_tokens).unsqueeze(0)
 
-    #Embed
+    # Embed
     eng_embedder = Embedder(eng_vocab_size)
     eng_embedding = eng_embedder(test_tokens)
     esp_embedder = Embedder(esp_vocab_size)
@@ -56,4 +56,3 @@ if __name__ == "__main__":
     transformer = Transformer(eng_vocab_size, esp_vocab_size)
     transformer_output = transformer(test_tokens, test_tgt_tokens)
     print(f"Transformer: {transformer_output.shape}")
-    

@@ -5,39 +5,26 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader
 
-from src.helpers import load_data
-from src.config import DATA_PATH, TRAIN_SPLIT, VAL_SPLIT
+from src.config import (
+    VOCAB_SIZE,
+    N_EPOCHS,
+    BATCH_SIZE,
+    PATIENCE,
+    N_TEST,
+)
+from src.data import prepare_data
 from src.tokenizer import Tokenizer
 from src.transformer import Transformer
 from train.translation_dataset import TranslationDataset
 from train.warmup_scheduler import WarmupScheduler
 from train.train import train, evaluate
-from train.inference import greedy_decode, beam_search_decode
-from train.metrics import compute_bleu
-from train.save_checkpoints import load_checkpoint, save_checkpoint
+from evals.inference import greedy_decode, beam_search_decode
+from evals.metrics import compute_bleu
+from train.checkpoints import load_checkpoint, save_checkpoint
 from train.plot import plot_losses
 
 TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
 TRAIN_MODEL = False
-N_EPOCHS = 25
-BATCH_SIZE = 32
-VOCAB_SIZE = 16000       # subword vocab per language
-MAX_LEN_FILTER = 25      # drop pairs longer than this (words)
-PATIENCE = 8             # safety net; best checkpoint saved each improvement
-N_TEST = 500             # held-out sentences to score for BLEU
-
-
-def prepare_data():
-    """Load, filter, and split. Deterministic so train/load see the same test set."""
-    data = load_data(DATA_PATH)
-    mask = (
-        (data["eng"].str.split().str.len() <= MAX_LEN_FILTER)
-        & (data["esp"].str.split().str.len() <= MAX_LEN_FILTER)
-    )
-    data = data[mask].reset_index(drop=True)
-    train_idx = int(len(data) * TRAIN_SPLIT)
-    val_idx = int(len(data) * (TRAIN_SPLIT + VAL_SPLIT))
-    return data, train_idx, val_idx
 
 
 def run_training(data, train_idx, val_idx, device):
@@ -49,21 +36,33 @@ def run_training(data, train_idx, val_idx, device):
     esp_vocab = tokenizer.create_vocab(
         data["esp"].tolist(), max_size=VOCAB_SIZE, model_prefix="data/spm_esp"
     )
-    print(f"Round trip: {tokenizer.detokenize(tokenizer.tokenize('El gato se sentó', esp_vocab), esp_vocab)!r}")
+    print(
+        f"Round trip: {tokenizer.detokenize(tokenizer.tokenize('El gato se sentó', esp_vocab), esp_vocab)!r}"
+    )
 
     eng_tokens = [tokenizer.tokenize(s, eng_vocab) for s in data["eng"]]
     esp_tokens = [tokenizer.tokenize(t, esp_vocab) for t in data["esp"]]
 
     train_dataset = TranslationDataset(eng_tokens[:train_idx], esp_tokens[:train_idx])
-    val_dataset = TranslationDataset(eng_tokens[train_idx:val_idx], esp_tokens[train_idx:val_idx])
+    val_dataset = TranslationDataset(
+        eng_tokens[train_idx:val_idx], esp_tokens[train_idx:val_idx]
+    )
     train_loader = DataLoader(
-        train_dataset, batch_size=BATCH_SIZE, shuffle=True, collate_fn=TranslationDataset.pad_batch,
+        train_dataset,
+        batch_size=BATCH_SIZE,
+        shuffle=True,
+        collate_fn=TranslationDataset.pad_batch,
     )
     val_loader = DataLoader(
-        val_dataset, batch_size=BATCH_SIZE, shuffle=False, collate_fn=TranslationDataset.pad_batch,
+        val_dataset,
+        batch_size=BATCH_SIZE,
+        shuffle=False,
+        collate_fn=TranslationDataset.pad_batch,
     )
 
-    model = Transformer(src_vocab_size=len(eng_vocab), tgt_vocab_size=len(esp_vocab)).to(device)
+    model = Transformer(
+        src_vocab_size=len(eng_vocab), tgt_vocab_size=len(esp_vocab)
+    ).to(device)
     print(f"Total parameters: {sum(p.numel() for p in model.parameters()):,}")
 
     loss_fn = nn.CrossEntropyLoss(ignore_index=0, label_smoothing=0.1)
@@ -79,11 +78,15 @@ def run_training(data, train_idx, val_idx, device):
     train_losses, val_losses = [], []
 
     for epoch in range(1, N_EPOCHS + 1):
-        train_loss = train(model, train_loader, optimizer, scheduler, loss_fn, device, epoch)
+        train_loss = train(
+            model, train_loader, optimizer, scheduler, loss_fn, device, epoch
+        )
         val_loss = evaluate(model, val_loader, loss_fn, device)
         train_losses.append(train_loss)
         val_losses.append(val_loss)
-        print(f"Epoch {epoch} | Train: {train_loss:.3f} | Val: {val_loss:.3f} | {(time.time() - start)/60:.1f} mins")
+        print(
+            f"Epoch {epoch} | Train: {train_loss:.3f} | Val: {val_loss:.3f} | {(time.time() - start)/60:.1f} mins"
+        )
 
         if val_loss < best_val_loss:
             best_val_loss = val_loss
@@ -101,6 +104,7 @@ def run_training(data, train_idx, val_idx, device):
 
 
 def show_sample_translations(model, eng_vocab, esp_vocab, tokenizer, device):
+    """Run trained model for sample vocab"""
     test_sentences = [
         ("The cat sat on the mat", "El gato se sentó en la alfombra"),
         ("I love you", "Te amo"),
@@ -111,17 +115,22 @@ def show_sample_translations(model, eng_vocab, esp_vocab, tokenizer, device):
     rows = []
     for eng, esp in test_sentences:
         tokens = torch.tensor(tokenizer.tokenize(eng, eng_vocab)).unsqueeze(0)
-        rows.append({
-            "source": eng,
-            "target": esp,
-            "greedy": greedy_decode(model, tokens, esp_vocab, device=device),
-            "beam": beam_search_decode(model, tokens, esp_vocab, device=device),
-        })
+        rows.append(
+            {
+                "source": eng,
+                "target": esp,
+                "greedy": greedy_decode(model, tokens, esp_vocab, device=device),
+                "beam": beam_search_decode(model, tokens, esp_vocab, device=device),
+            }
+        )
     print("\n--- Sample Translations ---")
     print(pd.DataFrame(rows).to_string(index=False))
 
 
-def evaluate_test_bleu(model, eng_vocab, esp_vocab, tokenizer, test_eng, test_esp, device):
+def evaluate_test_bleu(
+    model, eng_vocab, esp_vocab, tokenizer, test_eng, test_esp, device
+):
+    """Evaluate BLEU score for hold out set."""
     n = min(N_TEST, len(test_eng))
     refs, hyps = [], []
     for i in range(n):
@@ -142,9 +151,13 @@ if __name__ == "__main__":
     test_esp = data["esp"][val_idx:].tolist()
 
     if TRAIN_MODEL:
-        model, eng_vocab, esp_vocab, tokenizer = run_training(data, train_idx, val_idx, device)
+        model, eng_vocab, esp_vocab, tokenizer = run_training(
+            data, train_idx, val_idx, device
+        )
     else:
         model, eng_vocab, esp_vocab, tokenizer = load_checkpoint(Transformer, device)
 
     show_sample_translations(model, eng_vocab, esp_vocab, tokenizer, device)
-    evaluate_test_bleu(model, eng_vocab, esp_vocab, tokenizer, test_eng, test_esp, device)
+    evaluate_test_bleu(
+        model, eng_vocab, esp_vocab, tokenizer, test_eng, test_esp, device
+    )

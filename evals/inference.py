@@ -4,7 +4,7 @@ from src.tokenizer import Tokenizer
 
 
 def greedy_decode(model, src_tokens, tgt_vocab, max_len=50, device="cpu"):
-    """Generate a translation token by token."""
+    """Generate a translation token by token, picks the single highest probability token."""
     model.eval()
     src = src_tokens.to(device)
     tgt = torch.tensor([[tgt_vocab[BOS_WORD]]]).to(device)
@@ -24,7 +24,8 @@ def greedy_decode(model, src_tokens, tgt_vocab, max_len=50, device="cpu"):
 def beam_search_decode(model, src_tokens, tgt_vocab, beam_width=5, max_len=50, device="cpu"):
     """
     Generate a translation using beam search.
-    Keeps the top beam_width sentences and explores them all in parallel.
+    Keeps the top beam_width sentences and explores them all in parallel (slower).
+    Keeps the higher probability full sentence.
     """
     model.eval()
     src = src_tokens.to(device)

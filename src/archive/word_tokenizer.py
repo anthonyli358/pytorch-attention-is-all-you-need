@@ -3,7 +3,6 @@ from collections import Counter
 from torch.utils.data import Dataset, DataLoader
 
 from src.config import PAD_WORD, BOS_WORD, EOS_WORD, UNK_WORD
-from src.helpers import count_percent_of_dict
 
 
 class Tokenizer:
@@ -36,4 +35,26 @@ class Tokenizer:
         tokens += [vocab.get(w, vocab[UNK_WORD]) for w in sentence.lower().split()]
         tokens += [vocab[EOS_WORD]]
         return tokens
-    
+
+    @staticmethod
+    def count_percent_of_dict(counter: Counter) -> None:
+        """Report how many words cover 95% / 98% of the corpus.
+
+        Used when choosing a word-level vocab cutoff. Kept for reference now
+        that tokenisation is subword-based.
+
+        eng: 11469 words cover 95% of tokens, 25803 words cover 98% of tokens
+        esp: 25805 words cover 95% of tokens, 53828 words cover 98% of tokens
+        """
+        total = sum(counter.values())
+        running = 0
+        hit_95 = False
+        for i, (_word, count) in enumerate(counter.most_common()):
+            running += count
+            if not hit_95 and running / total >= 0.95:
+                print(f"{i} words cover 95% of tokens")
+                hit_95 = True
+            elif hit_95 and running / total >= 0.98:
+                print(f"{i} words cover 98% of tokens")
+                break
+        print(f"{len(counter)} words cover 100% of tokens")
