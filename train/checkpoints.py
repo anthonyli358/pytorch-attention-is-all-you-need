@@ -6,6 +6,7 @@ from src.config import (
     CHECKPOINTS_FOLDER,
     SPM_ENG_PREFIX,
     SPM_ESP_PREFIX,
+    TRAIN_STATE_PATH,
     spm_model_file,
 )
 from src.tokenizer import Tokenizer
@@ -42,3 +43,55 @@ def load_checkpoint(model_cls, device, dir=CHECKPOINTS_FOLDER):
     model.load_state_dict(torch.load(latest_model, map_location=device))
     model.eval()
     return model, eng_vocab, esp_vocab, tokenizer
+
+
+def save_training_state(
+    model,
+    optimizer,
+    scheduler,
+    epoch,
+    best_val_loss,
+    no_improve,
+    train_losses,
+    val_losses,
+    path=TRAIN_STATE_PATH,
+):
+    """Save full training state so an interrupted run can resume exactly."""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    torch.save(
+        {
+            "model": model.state_dict(),
+            "optimizer": optimizer.state_dict(),
+            "scheduler_step": scheduler.step_num,
+            "epoch": epoch,
+            "best_val_loss": best_val_loss,
+            "no_improve": no_improve,
+            "train_losses": train_losses,
+            "val_losses": val_losses,
+        },
+        path,
+    )
+
+
+def load_training_state(model, optimizer, scheduler, device, path=TRAIN_STATE_PATH):
+    """
+    Restore training state if a checkpoint exists.
+
+    If no state file is found, returns the defaults for a fresh run (start_epoch=1).
+    """
+    if not os.path.exists(path):
+        return 1, float("inf"), 0, [], []
+
+    print(f"Resuming training from {path}")
+    state = torch.load(path, map_location=device)
+    model.load_state_dict(state["model"])
+    optimizer.load_state_dict(state["optimizer"])
+    scheduler.step_num = state["scheduler_step"]
+    start_epoch = state["epoch"] + 1  # resume at the next epoch
+    return (
+        start_epoch,
+        state["best_val_loss"],
+        state["no_improve"],
+        state["train_losses"],
+        state["val_losses"],
+    )

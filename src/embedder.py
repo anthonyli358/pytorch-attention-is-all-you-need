@@ -2,8 +2,9 @@ import math
 import torch
 from torch import nn
 
+
 class Embedder(nn.Module):
-    def __init__(self, vocab_size:int, d_model=512, max_seq_len=3000, dropout=0.1):
+    def __init__(self, vocab_size: int, d_model=512, max_seq_len=3000, dropout=0.1):
         """
         Initialize a random matrix of vocab_size x embed_len.
 
@@ -22,14 +23,20 @@ class Embedder(nn.Module):
         pe = torch.zeros(max_seq_len, d_model)  # shape: (3000, 512)
         pos = torch.arange(0, max_seq_len).unsqueeze(1)  # shape: (3000, 1)
         div = 1 / (10000 ** (torch.arange(0, d_model, 2) / d_model))  # shape: (256,)
-        pe[:, 0::2] = torch.sin(pos * div)  # broadcasted multiplication (3000, 1) x (1, 256)
+        pe[:, 0::2] = torch.sin(
+            pos * div
+        )  # broadcasted multiplication (3000, 1) x (1, 256)
         pe[:, 1::2] = torch.cos(pos * div)
 
         # Fixed state tensor, add to buffer (self) for gpu
-        self.register_buffer('pe', pe.unsqueeze(0))  # shape: (1, 3000, 512)
+        self.register_buffer("pe", pe.unsqueeze(0))  # shape: (1, 3000, 512)
 
-    def forward(self, tokens:torch.Tensor):
-        x = self.embedding(tokens) * math.sqrt(self.d_model)  # section 3.4, increase embedding magnitude
-        x = x + self.pe[:, :tokens.size(1)]  # slice on dimension (assume 2d) to only include encoding on relevant tokens
+    def forward(self, tokens: torch.Tensor):
+        x = self.embedding(tokens) * math.sqrt(
+            self.d_model
+        )  # section 3.4, increase embedding magnitude
+        x = (
+            x + self.pe[:, : tokens.size(1)]
+        )  # slice on dimension (assume 2d) to only include encoding on relevant tokens
         x = self.dropout(x)
         return x

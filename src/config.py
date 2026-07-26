@@ -5,6 +5,7 @@ DATA_PATH = "data/Sentence pairs in English-Spanish - 2026-06-03.tsv"
 CHECKPOINTS_FOLDER = "checkpoints"
 SPM_ENG_PREFIX = "data/spm_eng"
 SPM_ESP_PREFIX = "data/spm_esp"
+TRAIN_STATE_PATH = "data/train_state.pt"
 
 # ----- Special tokens -----
 # Indices are fixed and must match the sentencepiece training config
@@ -22,7 +23,7 @@ UNK_IDX = 3
 TRAIN_SPLIT = 0.8
 VAL_SPLIT = 0.1  # remaining 0.1 is test
 MAX_LEN_FILTER = 25  # drop sentence pairs longer than this (words)
-VOCAB_SIZE = 16000  # subword vocab size per language
+VOCAB_SIZE = 16000  # BPE subword vocab per language
 
 # ----- Training -----
 N_EPOCHS = 25

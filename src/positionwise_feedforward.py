@@ -1,10 +1,11 @@
 import torch
 from torch import nn
 
+
 class PositionwiseFeedForward(nn.Module):
     def __init__(self, d_model=512, d_ff=2048, dropout=0.1):
         """
-        Fully connected feed-forward network. 
+        Fully connected feed-forward network.
         Two linear transformations with a ReLU activation in between.
 
         Args:
