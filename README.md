@@ -1,84 +1,21 @@
 # pytorch-attention-is-all-you-need
 Pytorch implementation of [[1706.03762] Attention Is All You Need](https://arxiv.org/abs/1706.03762).
 
-Using English -> Spanish sentence pairs from [Tatoeba](https://tatoeba.org/en/downloads).
-
-For GPU, got to the [pytorch](https://pytorch.org/get-started/locally/) website and select the local installs to get the bash command.
-
-To use this repo, [install uv](https://docs.astral.sh/uv/getting-started/installation/), pip is recommended.
-
-```bash
-uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
-```
-
-
-Plan:
-1. Tokeniser + vocab - transform TSV into integer sequences
-
-First we tokenize e.g. "dog" -> 123 (arbitrary number). Purely a lookup table where a larger corpus would have a larger tokenization dictionary.
-We can choose the cutoff for word_counts size by selecting the number which gets 95-98% of the corpus.
-Words that appear just once or twice never get enough gradient updates for the model to learn a useful embedding so we trim to reduce noise.
-
-We use PAD_WORD later because when we process batches each tensor has uniform dimensions, so with this we can mask them.
-
-2. Embedding + positional encoding - integers to vectors
-
-Initalise an embedding matrix of dimensions len(vocab) x a fixed vector length used for all tokens.
-This embeds a sentence.
-Now we want to add positional encoding so 'cat' at different positions are encoded differently, each sin and cos at a different frequency (based on position).
-We do this by creating a tensor of the same dimensions as the embedding, but encoding position.
-This takes a tensor of shapebatch x seq_len
-
-3. Attention
-
-a. Compute raw scores: QK^T / √d_k
-b. Mask - before softmax, so masked positions get -1e9 and softmax turns them into ~0 weight
-c. Softmax - normalise to get attention weights
-d. Dropout - after softmax, randomly zeroes out some attention weights during training
-e. Multiply by V
-f. Concat and apply W_o
-
-4. Encoder block - attention + FFN + residuals
-
-a. FFN - 3.3 in the paper. Two linear layers with ReLU in between: d_model → d_ff (2048) → d_model.
-b. Encoder layer - section 3.1 / Figure 1. N=6 of blocks that does: multi-head self-attention → add residual + layer norm → feed forward → add residual + layer norm.
-
-5. Decoder block - masked multi-head attention + cross-attention + FFN
-
-a. Positional mask stops positions from attending to subsequent positions, this is the 'mask'
-b. Cross-attention takes the dot product with the encoder output to find the best match (K), and information about it (V)
-
-6. Full model - wire it all together
-
-a. Pass the batched tokens in the input, not the workaround. Otherwise masks don't apply properly
-
-7. Training loop - loss, optimiser, learning rate schedule
-
- Approx 25,000 source and target tokens per batch, start with 32.
- 
- Extensions
-
-# Create separate file for the test set evaluation
-
-- BLEU score — loss tells you how wrong the model is, but BLEU measures translation quality by comparing n-gram overlap with reference translations. It's the standard metric for machine translation. nltk or sacrebleu libraries have it built in.
-- Translate multiple test sentences — run greedy_decode on a batch of test examples and print them side by side with the reference. Eyeballing actual translations tells you more than any number.
-- Beam search — replace greedy decode with beam search for better translations.
-
-Removed unk from greedy_decode and beam_search_decode due to underfitting (missing rare words like alfombra and bano). We can run more epochs (> 20) or try proper subword tokenization to better capture rarer words.
-
-Add label smoothing, and reduce dropout for poc (smaller dataset)
-
-# pytorch-attention-is-all-you-need
-
-A from-scratch PyTorch implementation of the Transformer from [*Attention Is All You Need*](https://arxiv.org/abs/1706.03762) (Vaswani et al., 2017), trained for English → Spanish translation on [Tatoeba](https://tatoeba.org/en/downloads) sentence pairs.
-
-Every core component — scaled dot-product attention, multi-head attention, positional encoding, the encoder/decoder stack, masking, and beam search — is written by hand rather than using `torch.nn.Transformer`. The only external model dependency is [SentencePiece](https://github.com/google/sentencepiece) for subword tokenisation.
+Creating an English -> Spanish translator using sentence pairs from [Tatoeba](https://tatoeba.org/en/downloads).
 
 ## Results
 
-Trained for 25 epochs on ~single GPU, the model reaches **22.5 BLEU** on a 500-sentence held-out test set.
+Trained for 25 epochs on ~single GPU, the train/validation loss both improve until the validation loss plateaus around epoch 15.
 
-| Source | Reference | Model output |
+<p align="left">
+    <img src="outputs/loss.png" alt="loss" width="600"/>  
+</p>
+
+The absolute loss values are inflated by label smoothing, which is used in the paper to improve the model generalisation. Rather than training for 100% probability on the correct token like in normal cross-entropy loss, label smoothing teaches the model to stay slightly uncertain and only assign 90% probability to the correct token and spread the remaining 10% across the other tokens. This generalises better to real language problems.
+
+The model reaches **22.5 BLEU** on a 500-sentence held-out test set.
+
+| Source | Reference | Model output (greedy and beam) |
 |---|---|---|
 | The cat sat on the mat | El gato se sentó en la alfombra | El gato se sentó en la silla. |
 | I love you | Te amo | Te quiero. |
@@ -86,99 +23,113 @@ Trained for 25 epochs on ~single GPU, the model reaches **22.5 BLEU** on a 500-s
 | She went to the store | Ella fue a la tienda | Ella fue a la tienda. |
 | We are learning Spanish | Estamos aprendiendo español | Estamos aprendiendo español. |
 
-The model produces fluent, correctly punctuated Spanish, including inverted question marks it learned from the data. Some outputs differ from the reference while remaining valid ("Te quiero" vs "Te amo" for "I love you") — a known limitation of BLEU, which penalises correct alternatives.
-
-## Architecture
-
-Faithful to the base model in the paper:
-
-- **d_model**: 512
-- **Layers**: 6 encoder, 6 decoder
-- **Attention heads**: 8 (d_k = 64 per head)
-- **Feed-forward dimension**: 2048
-- **Dropout**: 0.1
-- **Positional encoding**: fixed sinusoidal
-
-Training details follow the paper where practical: Adam with β = (0.9, 0.98), the Noam warmup learning-rate schedule, label smoothing (0.1), and Xavier initialisation. The warmup step count is scaled to the size of the training run rather than fixed at the paper's 4000, which assumes a much larger dataset.
-
-## Project structure
+ BLEU is the standard automatic metric for machine translation quality which measures how much a test translation overlaps with the target translation. It calculates the n-gram precision and combines them as a geometric mean, then it applies a brevity penalty so short outputs with 100% precision are penalised. For the held-out test result:
 
 ```
-src/
-  embedder.py               token embedding + sinusoidal positional encoding
-  multi_head_attention.py   scaled dot-product + multi-head attention
-  positionwise_feedforward.py
-  encoder.py                encoder layer + stack
-  decoder.py                decoder layer (self-attn, cross-attn, ffn) + stack
-  transformer.py            full model, wires encoder + decoder + output projection
-  tokenizer.py              SentencePiece BPE wrapper
-  helpers.py                data loading, padding + causal masks
-  config.py                 hyperparameters and special tokens
-train/
-  translation_dataset.py    Dataset + dynamic batch padding
-  train.py                  train / evaluate loops
-  warmup_scheduler.py       Noam learning-rate schedule
-  inference.py              greedy + beam search decoding
-  metrics.py                BLEU (sacrebleu)
-  save_checkpoints.py       save / load model weights
-  plot.py                   loss curves
-main.py                     entry point (train or load + evaluate)
+BLEU = 22.53   54.3/27.6/17.1/10.1 (BP = 1.000, ratio = 1.021)
 ```
 
-## Usage
+**Geometric mean of the precisions** $p_1, \dots, p_4$:
 
-Install dependencies:
+$$\text{geo\_mean} = \left( \prod_{n=1}^{4} p_n \right)^{1/4} = (0.543 \times 0.276 \times 0.171 \times 0.101)^{1/4} \approx 0.2255$$
+
+**Brevity penalty**, where $c$ is the candidate length and $r$ the reference length:
+
+$$BP = \begin{cases} 1 & \text{if } c > r \\ e^{(1 - r/c)} & \text{if } c \le r \end{cases}$$
+
+Here $c = 3632 \ge r = 3556$, so $BP = 1.000$.
+
+**Final score** (scaled to 0–100):
+
+$$BLEU = BP \times \text{geo\_mean} \times 100 = 1.000 \times 0.2255 \times 100 \approx 22.5$$
+
+A good score requires performing well at every n-gram level, and although known limitation of BLEU is that it penalises correct alternatives such as "Te quiero" vs "Te amo" for "I love you" in our results, we have still done well here. 
+
+The original paper scores 27.3–28.4 BLEU on English–German WMT 2014. Although scores across languages and datasets aren't directly comparable, the main limitation here is the smaller dataset of ~280k sentence pairs compared to the original's ~4.5M. The smaller dataset means we lack sufficient data to fully generalise for language translation (the upside being faster training runs that fit on a single GPU). One improvement might be to increase the number of acceptable reference translations to mitigate the penalty for correct alternatives.
+
+## Getting Started 
+
+1. For GPU, go to the [pytorch](https://pytorch.org/get-started/locally/) website and select the local installs to get the bash command.
+
+2. To use this repo, [install uv](https://docs.astral.sh/uv/getting-started/installation/). Then to add torch to the project correctly we need to add the correct index url too.
+
+```bash
+uv add torch --index-url https://download.pytorch.org/whl/cu126
+```
+
+3. Now install dependencies.
 
 ```bash
 uv sync
 ```
 
-Download the English–Spanish sentence pairs from [Tatoeba](https://tatoeba.org/en/downloads) and place the TSV in `data/`, updating `DATA_PATH` in `src/config.py`.
+4. Download the English–Spanish sentence pairs from [Tatoeba](https://tatoeba.org/en/downloads) and place the TSV in `data/`, updating `DATA_PATH` in `src/config.py`.
 
-Train from scratch (set `TRAIN_MODEL = True` in `main.py`):
+5. Then train from scratch (set `TRAIN_MODEL = True` in `main.py`).
 
 ```bash
-python main.py
+uv run python main.py
 ```
 
-The best checkpoint (by validation loss) is saved to `checkpoints/` each time it improves, and a loss curve is written alongside it. To evaluate an existing checkpoint, set `TRAIN_MODEL = False` and run again.
+6. The best checkpoint (by validation loss) is saved to `checkpoints/` each time it improves, and a loss curve is written alongside it. To evaluate an existing checkpoint, set `TRAIN_MODEL = False` and run again.
 
-## Implementation notes
+7. During development check shape and understanding with the tests.
 
-A few details that matter and are easy to get wrong:
+```bash
+uv run pytest
+uv run python smoke_test.py
+```
 
-- **Masking**: a padding mask (shape `(batch, 1, 1, seq_len)`) prevents attention over `<pad>` tokens in the encoder and cross-attention; the decoder additionally combines it with a causal mask so each position only attends to earlier ones. Masked positions are set to `-1e9` *before* softmax.
-- **Teacher forcing**: the decoder input is the target shifted right (`<bos> ...`) and the loss compares against the target shifted left (`... <eos>`), so each position predicts the next token.
-- **Subword tokenisation**: word-level tokenisation sent rare words to `<unk>` and capped translation quality. SentencePiece BPE decomposes unseen words into known subword pieces, effectively eliminating `<unk>`.
-- **Checkpoint saving**: the best model is saved *during* training on each validation improvement, so a crash or interruption never loses good weights.
 
-## Debugging notes
+## Development
 
-Getting the model to train well took more debugging than writing the architecture, and the process is worth recording.
+This repo implements the transformer from scratch for understanding. In production you'd use `torch.nn.Transformer` (or `F.scaled_dot_product_attention`) for the fused, optimised kernels.
 
-Early runs plateaued at a high loss and generation collapsed into repeating a single token (indicar indicar indicar...). The key to diagnosing this was the overfit-a-tiny-batch test: training on ~100 sentence pairs to confirm the model could memorise them. It could — loss dropped near zero and it reproduced the training data — which proved the architecture, masking, and loss shift were all correct, and pointed the investigation at training setup rather than model code.
+The most important takeaways from this implementation exercise are:
+- Both padding and causal **masks** need to be the same return type (bool) and pass the device to the causal mask so it uses the same device as the model. The decoder uses a causal mask so each position attends only to itself and earlier tokens, never future ones.
+- Simply using the 4000 steps from the paper's far larger dataset didn't scale to the smaller dataset and caused loss to plateau. Scaling the **warmup steps** to ~10% of the total training steps so the learning rate peaks and decays at the correct points fixed this.
+-  **Tokenization** at the word level simply sets rare words to `<unk>` which heavily caps translation quality (or blows up the dataset size). SentencePiece BPE (Byte Pair Encoding) decomposes unseen words into known subword pieces, effectively eliminating `<unk>`. BPE iteratively replaces the most frequent pair of bytes with a new byte until the desired vocabulary size is reached e.g. if many words end in "er" (lower, higher, faster), the frequent 'e', 'r' pair gets merged into a single 'er' token.
+- Since training takes compute and time, saving **checkpoints** is important for resuming training at various points.
+- **Label smoothing** is a very important part of the regularization (section 5.4).
 
-From there the real causes surfaced one at a time:
+### Implementation
 
-The plateau was a learning-rate schedule issue: the Noam warmup was hardcoded to 4000 steps (tuned for the paper's far larger dataset), so a short run never left the warmup phase. Scaling warmup to ~10% of total steps fixed it.
-The garbled generation was a stale checkpoint — inference was loading weights from an earlier failed run whose vocabulary no longer matched. Saving the best checkpoint during training (rather than after a blocking plot call that could be interrupted) removed the failure mode.
-Remaining quality was capped by word-level tokenisation sending rare words to <unk>. Switching to SentencePiece BPE was the single biggest quality improvement.
+1. Word tokenizer 
 
-The lesson that generalised: when a model looks broken, separate "is the architecture correct?" from "is the training correct?" before changing anything. The overfit test answers the first question cheaply and tells you which half of the problem to work on.
+   First we tokenize words into a lookup table where a larger corpus has a larger dictionary e.g. "dog" -> 123 (arbitrary number). We can choose the cutoff for word_counts size by selecting the number which covers 95-98% of the corpus. Rare words that appear just once or twice never get enough gradient updates for the model to learn a useful embedding so we trim them to reduce noise. We use PAD_WORD so that sequences of a different length can be padded to a shared shape within a batch and masked later. Due to its vocabulary limitations, this initial word-level tokenizer was later replaced with SentencePiece BPE.
 
-## Acknowledgements
+2. Embedding + positional encoding
+
+    Now initalise an embedding matrix of dimensions `len(vocab) x d_model ` (a fixed length used for all tokens), this embeds a sentence. To encode order we use sin and cos at different frequencies (based on position) to add a positional encoding to each token's embedding. This layer takes a tensor of `batch x seq_len` and returns `batch x seq_len x d_model`.
+
+3. Attention
+
+    The scaled dot-product attention $\text{softmax}(QK^T / \sqrt{d_k})\,V$ computes how much each token should attend to other tokens (section 3.2.1). Dividing by $\sqrt{d_k}$ keeps the scores from growing large, which would otherwise saturate the softmax and shrink its gradients.
+    We mask before softmax so masked positions get -1e9 and softmax turns them into 0 weight. Then dropout applies to randomly zero weights and reduce the chance of overfitting. Multi-head attention runs 8 of these attention blocks in parallel over 64-dim subspaces (`d_k = d_model / n_heads`) so different heads can specialise, then concatenates the heads and projects the result (section 3.2.2).
+
+4. Encoder
+
+    We then create a FFN (feed forward network) - two linear layers with ReLU in between `d_model → d_ff (2048) → d_model` (section 3.3). An encoder layer combines multi-head self-attention → add residual + layer norm → feed-forward → add residual + layer norm, and the encoder stacks N = 6 of these (section 3.1, figure 1).
+
+5. Decoder
+
+    In the decoder the causal mask stops positions from attending to future tokens (only itself and past positions). Cross-attention then takes the dot product with the encoder output to find the best match (K), and information about it (V), given the query (Q). The $Q\cdot K$ match finds which source tokens are relevant to what the decoder needs now.
+
+6. Transformer
+
+    Wire it all together in the full transformer and construct the masks from the batch input tokens.
+
+7. Training loop
+
+    Trained with cross-entropy loss, the Adam optimizer ($\beta = 0.9, 0.98$), and the warmup learning-rate schedule (section 5.3). The paper batches by token count (~25k tokens/batch) whereas here we use a fixed batch size of 32 for simplicity. We trained for 25 epochs (~3 hours on an RTX 3060 Ti) and validation loss plateaus around epoch 15, so this leaves headroom without overfitting.
+
+<a id="evaluate"></a>
+8. Evaluate
+
+    We use BLEU scores as the evaluation metric for translations and ran multiple test sentences using both greedy decode and beam search. For shor ter sentences there generally wasn't any difference between the two, this is because there isn't as much probability to diverge. During initial evaluations we ran into test sentences returning `<unk>` far too often, which was solved by introducing SentencePiece BPE.
+
+## Resources
 
 - Vaswani et al., [*Attention Is All You Need*](https://arxiv.org/abs/1706.03762) (2017)
 - [Tatoeba](https://tatoeba.org) for the sentence-pair corpus
 - [SentencePiece](https://github.com/google/sentencepiece) for subword tokenisation
-
---- Sample Translations ---
-                 source                          target                        greedy                          beam
- The cat sat on the mat El gato se sentó en la alfombra El gato se sentó en la silla. El gato se sentó en la silla.
-             I love you                          Te amo                       Te amo.                       Te amo.
-  Where is the bathroom              Dónde está el baño         Mi baño está de baño.            Papá está el baño.
-  She went to the store            Ella fue a la tienda         Ella fue a la tienda.         Ella fue a la tienda.
-We are learning Spanish     Estamos aprendiendo español   Estamos estudiando español.   Estamos estudiando español.
-
---- Held-out Test BLEU (500 sentences) ---
-BLEU = 22.53 54.3/27.6/17.1/10.1 (BP = 1.000 ratio = 1.021 hyp_len = 3632 ref_len = 3556)
