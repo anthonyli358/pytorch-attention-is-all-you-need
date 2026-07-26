@@ -31,7 +31,7 @@ BLEU = 22.53   54.3/27.6/17.1/10.1 (BP = 1.000, ratio = 1.021)
 
 **Geometric mean of the precisions** $p_1, \dots, p_4$:
 
-$$\text{geo_mean} = \left( \prod_{n=1}^{4} p_n \right)^{1/4} = (0.543 \times 0.276 \times 0.171 \times 0.101)^{1/4} \approx 0.2255$$
+$$\text{geomean} = \left( \prod_{n=1}^{4} p_n \right)^{1/4} = (0.543 \times 0.276 \times 0.171 \times 0.101)^{1/4} \approx 0.2255$$
 
 **Brevity penalty**, where $c$ is the candidate length and $r$ the reference length:
 
@@ -41,7 +41,7 @@ Here $c = 3632 \ge r = 3556$, so $BP = 1.000$.
 
 **Final score** (scaled to 0–100):
 
-$$BLEU = BP \times \text{geo_mean} \times 100 = 1.000 \times 0.2255 \times 100 \approx 22.5$$
+$$BLEU = BP \times \text{geomean} \times 100 = 1.000 \times 0.2255 \times 100 \approx 22.5$$
 
 A good score requires performing well at every n-gram level, and although known limitation of BLEU is that it penalises correct alternatives such as "Te quiero" vs "Te amo" for "I love you" in our results, we have still done well here. 
 
