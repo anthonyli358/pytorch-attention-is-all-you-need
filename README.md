@@ -23,7 +23,7 @@ The model reaches **22.5 BLEU** on a 500-sentence held-out test set.
 | She went to the store | Ella fue a la tienda | Ella fue a la tienda. |
 | We are learning Spanish | Estamos aprendiendo español | Estamos aprendiendo español. |
 
- BLEU is the standard automatic metric for machine translation quality which measures how much a test translation overlaps with the target translation. It calculates the n-gram precision and combines them as a geometric mean, then it applies a brevity penalty so short outputs with 100% precision are penalised. For the held-out test result:
+ [BLEU](evals/metrics.py) is the standard automatic metric for machine translation quality which measures how much a test translation overlaps with the target translation. It calculates the n-gram precision and combines them as a geometric mean, then it applies a brevity penalty so short outputs with 100% precision are penalised. For the held-out test result:
 
 ```
 BLEU = 22.53   54.3/27.6/17.1/10.1 (BP = 1.000, ratio = 1.021)
@@ -86,46 +86,46 @@ uv run python smoke_test.py
 This repo implements the transformer from scratch for understanding. In production you'd use `torch.nn.Transformer` (or `F.scaled_dot_product_attention`) for the fused, optimised kernels.
 
 The most important takeaways from this implementation exercise are:
-- Both padding and causal **masks** need to be the same return type (bool) and pass the device to the causal mask so it uses the same device as the model. The decoder uses a causal mask so each position attends only to itself and earlier tokens, never future ones.
-- Simply using the 4000 steps from the paper's far larger dataset didn't scale to the smaller dataset and caused loss to plateau. Scaling the **warmup steps** to ~10% of the total training steps so the learning rate peaks and decays at the correct points fixed this.
--  **Tokenization** at the word level simply sets rare words to `<unk>` which heavily caps translation quality (or blows up the dataset size). SentencePiece BPE (Byte Pair Encoding) decomposes unseen words into known subword pieces, effectively eliminating `<unk>`. BPE iteratively replaces the most frequent pair of bytes with a new byte until the desired vocabulary size is reached e.g. if many words end in "er" (lower, higher, faster), the frequent 'e', 'r' pair gets merged into a single 'er' token.
-- Since training takes compute and time, saving **checkpoints** is important for resuming training at various points.
-- **Label smoothing** is a very important part of the regularization (section 5.4).
+- Both padding and causal [**masks**](src/masks.py) need to be the same return type (bool) and pass the device to the causal mask so it uses the same device as the model. The decoder uses a causal mask so each position attends only to itself and earlier tokens, never future ones.
+- Simply using the 4000 steps from the paper's far larger dataset didn't scale to the smaller dataset and caused loss to plateau. Scaling the [**warmup steps**](train/warmup_scheduler.py) to ~10% of the total training steps so the learning rate peaks and decays at the correct points fixed this.
+-  [**Tokenization**](src/tokenizer.py) at the word level simply sets rare words to `<unk>` which heavily caps translation quality (or blows up the dataset size). SentencePiece BPE (Byte Pair Encoding) decomposes unseen words into known subword pieces, effectively eliminating `<unk>`. BPE iteratively replaces the most frequent pair of bytes with a new byte until the desired vocabulary size is reached e.g. if many words end in "er" (lower, higher, faster), the frequent 'e', 'r' pair gets merged into a single 'er' token.
+- Since training takes compute and time, saving [**checkpoints**](train/checkpoints.py) is important for resuming training at various points.
+- [**Label smoothing**](src/config.py) is a very important part of the regularization (section 5.4).
 
 ## Implementation
 
-### 1. Word tokenizer 
+### 1. Word tokenizer
 
-First we tokenize words into a lookup table where a larger corpus has a larger dictionary e.g. "dog" -> 123 (arbitrary number). We can choose the cutoff for word_counts size by selecting the number which covers 95-98% of the corpus. Rare words that appear just once or twice never get enough gradient updates for the model to learn a useful embedding so we trim them to reduce noise. We use PAD_WORD so that sequences of a different length can be padded to a shared shape within a batch and masked later. Due to its vocabulary limitations, this initial word-level tokenizer was later replaced with SentencePiece BPE.
+First we [tokenize words](src/tokenizer.py) into a lookup table where a larger corpus has a larger dictionary e.g. "dog" -> 123 (arbitrary number). We can choose the [cutoff for word_counts](src/data.py) size by selecting the number which covers 95-98% of the corpus. Rare words that appear just once or twice never get enough gradient updates for the model to learn a useful embedding so we trim them to reduce noise. We use PAD_WORD so that sequences of a different length can be padded to a shared shape within a batch and masked later. Due to its vocabulary limitations, this initial word-level tokenizer was later replaced with SentencePiece BPE.
 
 ### 2. Embedding + positional encoding
 
-Now initalise an embedding matrix of dimensions `len(vocab) x d_model ` (a fixed length used for all tokens), this embeds a sentence. To encode order we use sin and cos at different frequencies (based on position) to add a positional encoding to each token's embedding. This layer takes a tensor of `batch x seq_len` and returns `batch x seq_len x d_model`.
+Now initalise an [embedding matrix](src/embedder.py) of dimensions `len(vocab) x d_model ` (a fixed length used for all tokens), this embeds a sentence. To encode order we use sin and cos at different frequencies (based on position) to add a positional encoding to each token's embedding. This layer takes a tensor of `batch x seq_len` and returns `batch x seq_len x d_model`.
 
 ### 3. Attention
 
-The scaled dot-product attention $\text{softmax}(QK^T / \sqrt{d_k})\,V$ computes how much each token should attend to other tokens (section 3.2.1). Dividing by $\sqrt{d_k}$ keeps the scores from growing large, which would otherwise saturate the softmax and shrink its gradients.
+The [scaled dot-product attention](src/multi_head_attention.py) $\text{softmax}(QK^T / \sqrt{d_k})\,V$ computes how much each token should attend to other tokens (section 3.2.1). Dividing by $\sqrt{d_k}$ keeps the scores from growing large, which would otherwise saturate the softmax and shrink its gradients.
 We mask before softmax so masked positions get -1e9 and softmax turns them into 0 weight. Then dropout applies to randomly zero weights and reduce the chance of overfitting. Multi-head attention runs 8 of these attention blocks in parallel over 64-dim subspaces (`d_k = d_model / n_heads`) so different heads can specialise, then concatenates the heads and projects the result (section 3.2.2).
 
 ### 4. Encoder
 
-We then create a FFN (feed forward network) - two linear layers with ReLU in between `d_model → d_ff (2048) → d_model` (section 3.3). An encoder layer combines multi-head self-attention → add residual + layer norm → feed-forward → add residual + layer norm, and the encoder stacks N = 6 of these (section 3.1, figure 1).
+We then create a [FFN (feed forward network)](src/positionwise_feedforward.py) - two linear layers with ReLU in between `d_model → d_ff (2048) → d_model` (section 3.3). An [encoder layer](src/encoder.py) combines multi-head self-attention → add residual + layer norm → feed-forward → add residual + layer norm, and the encoder stacks N = 6 of these (section 3.1, figure 1).
 
 ### 5. Decoder
 
-In the decoder the causal mask stops positions from attending to future tokens (only itself and past positions). Cross-attention then takes the dot product with the encoder output to find the best match (K), and information about it (V), given the query (Q). The $Q\cdot K$ match finds which source tokens are relevant to what the decoder needs now.
+In the [decoder](src/decoder.py) the [causal mask](src/masks.py) stops positions from attending to future tokens (only itself and past positions). Cross-attention then takes the dot product with the encoder output to find the best match (K), and information about it (V), given the query (Q). The $Q\cdot K$ match finds which source tokens are relevant to what the decoder needs now.
 
 ### 6. Transformer
 
-Wire it all together in the full transformer and construct the masks from the batch input tokens.
+Wire it all together in the full [transformer](src/transformer.py) and construct the masks from the batch input tokens.
 
 ### 7. Training loop
 
-Trained with cross-entropy loss, the Adam optimizer ($\beta = 0.9, 0.98$), and the warmup learning-rate schedule (section 5.3). The paper batches by token count (~25k tokens/batch) whereas here we use a fixed batch size of 32 for simplicity. We trained for 25 epochs (~3 hours on an RTX 3060 Ti) and validation loss plateaus around epoch 15, so this leaves headroom without overfitting.
+Trained with cross-entropy loss, the Adam optimizer ($\beta = 0.9, 0.98$), and the [warmup learning-rate schedule](train/warmup_scheduler.py) (section 5.3). The paper batches by token count (~25k tokens/batch) whereas here we use a fixed batch size of 32 for simplicity. We [trained](train/train.py) for 25 epochs (~3 hours on an RTX 3060 Ti) and validation loss plateaus around epoch 15, so this leaves headroom without overfitting.
 
 ### 8. Evaluate
 
-We use BLEU scores as the evaluation metric for translations and ran multiple test sentences using both greedy decode and beam search. For shor ter sentences there generally wasn't any difference between the two, this is because there isn't as much probability to diverge. During initial evaluations we ran into test sentences returning `<unk>` far too often, which was solved by introducing SentencePiece BPE.
+We use [BLEU scores](evals/metrics.py) as the evaluation metric for translations and ran multiple test sentences using both [greedy decode and beam search](evals/inference.py). For shorter sentences there generally wasn't any difference between the two, this is because there isn't as much probability to diverge. During initial evaluations we ran into test sentences returning `<unk>` far too often, which was solved by introducing [SentencePiece BPE](src/tokenizer.py).
 
 ## Resources
 
